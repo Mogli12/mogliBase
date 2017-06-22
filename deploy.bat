@@ -7,3 +7,6 @@
 
 @echo "mogliHud.lua"
 @xcopy src\mogliHud.lua ..\AIVehicleExtension\src /R/U/Y/Q
+
+@echo "mogliGUI.lua"
+@xcopy src\mogliGUI.lua ..\AIVehicleExtension\src /R/U/Y/Q

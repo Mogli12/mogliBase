@@ -10,3 +10,4 @@
 
 @echo "mogliScreen.lua"
 @xcopy src\mogliScreen.lua ..\GearboxAddon\src /R/U/Y/Q
+@xcopy src\mogliScreen.lua ..\KeyboardSteer\FS17_KeyboardSteer /R/U/Y/Q

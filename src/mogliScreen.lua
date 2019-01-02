@@ -4,11 +4,12 @@
 --
 -- change log
 -- 1.00 initial version
+-- 1.07 FS19, title
 
 -- Usage:  source(Utils.getFilename("mogliScreen.lua", g_currentModDirectory));
 --         _G[g_currentModDirectory.."mogliScreen"].newClass( "AutoCombine", "acParameters" )
 
-local mogliScreenVersion   = 1.06
+local mogliScreenVersion   = 1.08
 local mogliScreenClass     = g_currentModName..".mogliScreen"
 
 if _G[mogliScreenClass] ~= nil and _G[mogliScreenClass].version ~= nil and _G[mogliScreenClass].version >= mogliScreenVersion then
@@ -47,6 +48,7 @@ else
 			self.returnScreenName = "";
 			self.vehicle = nil
 			self.mogliScreenElements = {}
+			self.mogliTexts = {}
 			if type(_newClass_.mogliScreenNew)=="function" then
 				_newClass_.mogliScreenNew(self) 
 			end			
@@ -69,12 +71,20 @@ else
 				_newClass_.mogliScreenOnCreate(self,element) 
 			end
 		end
+
+	--********************************
+	-- setTitle
+	--********************************
+		function _newClass_:setTitle( title )
+			replaceTexts( self, self, title )
+		end 
 		
 	--********************************
 	-- setVehicle
 	--********************************
 		function _newClass_:setVehicle( vehicle )
 			self.vehicle       = vehicle 
+			
 			if self.vehicle ~= nil then
 				for name,s in pairs( self.mogliScreenElements ) do
 					if s.parameter == "list" or s.parameter == "list0" then
@@ -123,7 +133,7 @@ else
 				_newClass_.mogliScreenPostUpdate( self, dt )
 			end
 			
-			InputBinding.setShowMouseCursor(true)			
+			InputBinding:setShowMouseCursor(true)			
 		end
 
 	--********************************
@@ -160,13 +170,13 @@ else
 					else
 						local value = getter( self.vehicle )
 						
-						if     element:isa( ToggleButtonElement2 ) then
+						if     element.typeName == "checkedOption" then
 							local b = value
 							if s.parameter then
 								b = not b
 							end
 							element:setIsChecked( b )
-						elseif element:isa( MultiTextOptionElement ) then
+						elseif element.typeName == "multiTextOption" then
 							local i = 1
 							if     s.parameter == "percent10" then
 								i = math.floor( value * 10 + 0.5 ) + 1
@@ -174,6 +184,8 @@ else
 								i = math.floor( value * 20 + 0.5 ) + 1
 							elseif s.parameter == "list0" then
 								i = value + 1
+							elseif s.parameter == "bool" then 
+								if value then i = 2 end
 							else
 								i = value 
 							end
@@ -216,14 +228,14 @@ else
 					
 					if     setter == nil then
 						print("Invalid UI element ID: "..tostring(name))
-					elseif element:isa( ToggleButtonElement2 ) then
+					elseif element.typeName == "checkedOption" then
 						local b = element:getIsChecked()
 						if s.parameter then
 							b = not b
 						end
 					--print("SET: "..tostring(name)..": '"..tostring(b).."'")
 						setter( self.vehicle, b )
-					elseif element:isa( MultiTextOptionElement ) then
+					elseif element.typeName == "multiTextOption" then
 						local i = element:getState()
 						local value = i
 						if     s.parameter == "percent10" then
@@ -232,6 +244,8 @@ else
 							value = (i-1) * 0.05
 						elseif s.parameter == "list0" then
 							value = i - 1
+						elseif s.parameter == "bool" then 
+							value = ( i > 1 )
 						end
 					--print("SET: "..tostring(name)..": '"..tostring(value).."'")
 						
@@ -255,26 +269,57 @@ else
 		end
 
 	--********************************
+	-- replaceTexts (local)
+	--********************************
+		function replaceTexts( screen, element, title )
+			if element.mogliTextReplaced then 
+				return 
+			end 
+			element.mogliTextReplaced = true 
+			if element.toolTipText ~= nil and element.toolTipText:sub(1,7) == "$mogli_" then 
+				local n = element.toolTipText:sub(8)
+				element.toolTipText = Utils.getNoNil( screen.mogliTexts[n], n )			
+			end 
+			if element.text ~= nil and element.text:sub(1,7) == "$mogli_" then 
+				local n = element.text:sub(8)
+				if type( element.setText ) == "function" then 
+					element:setText( Utils.getNoNil( screen.mogliTexts[n], n ) )
+				else 
+					element.text = Utils.getNoNil( screen.mogliTexts[n], n )
+				end 
+			elseif title ~= nil and element.id ~= nil and element.id == "mogliHeaderText" then 
+				if type( element.setText ) == "function" then 
+					element:setText( screen.mogliTexts[title] )
+				else 
+					element.text = screen.mogliTexts[title]
+				end 
+			end 
+			if type( element.elements ) == "table" then 
+				for _,e in pairs(element.elements) do 
+					replaceTexts( screen, e, title ) 
+				end 
+			end 
+		end 
+	
+	--********************************
 	-- onCreateSubElement
 	--********************************
 		function _newClass_:onCreateSubElement( element, parameter )
+			if element == nil or element.typeName == nil then 
+				print("Invalid element.typeName: <nil>")
+				return
+			end 
 			local checked = true
 			if element.id == nil then
 				checked = false
 			end
-			if     element:isa( ToggleButtonElement2 ) then
-				if     parameter == nil then
-					parameter = false
-				elseif parameter == "inverted" then
-					parameter = true
-				else
-					print("Invalid ToggleButtonElement2 parameter: <nil>")
-					checked = false
-				end
-			elseif element:isa( MultiTextOptionElement ) then
-				if parameter == nil then
-					print("Invalid MultiTextOptionElement parameter: <nil>")			
-					checked = false
+			if     element.typeName == "multiTextOption" then
+				if     parameter == nil 
+						or parameter == "bool" then
+					parameter = "bool"
+				--if table.getn(element.texts) ~= 2 then 
+				--	element:setTexts({g_i18n:getText("ui_off"), g_i18n:getText("ui_on")})
+				--end 
 				elseif parameter == "list"
 						or parameter == "list0" then
 					element:setTexts({"vehicle is <nil>"})
@@ -416,8 +461,8 @@ else
 	-- onFocusSettingsBox()
 	--********************************
 		function _newClass_:mogliFocusToolTip(element)
-			if self.mogliToolTipBox ~= nil and element.toolTip ~= nil then
-				self.mogliToolTipBoxText:setText(element.toolTip)
+			if self.mogliToolTipBox ~= nil and element.toolTipText ~= nil then
+				self.mogliToolTipBoxText:setText(element.toolTipText)
 				self.mogliToolTipBox:setVisible(true)
 			end
 		end		
@@ -426,8 +471,8 @@ else
 	-- mogliScreenGetPageTitle()
 	--********************************
 		function _newClass_:mogliScreenGetPageTitle(page)
-			if page.element.toolTip ~= nil then
-				return page.element.toolTip
+			if page.element.toolTipText ~= nil then
+				return page.element.toolTipText
 			end
 			return page.element.name
 		end

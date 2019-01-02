@@ -24,11 +24,12 @@
 -- 3.18 sync events instead of readStream / writeStream  
 -- 3.19 missing syncs in SP and MP
 -- 3.20 WARNING: undefined input in gearboxMogli:  
+-- 4.00 FS19
 
 -- Usage:  source(Utils.getFilename("mogliBase.lua", g_currentModDirectory));
 --         _G[g_currentModDirectory.."mogliBase"].newClass( "AutoCombine", "acParameters" )
 
-local mogliBaseVersion   = 3.20
+local mogliBaseVersion   = 4.00
 local mogliBaseClass     = g_currentModName..".mogliBase"
 local mogliEventClass    = g_currentModName..".mogliEvent"
 local mogliSyncRequest   = g_currentModName..".mogliSyncRequest"
@@ -92,7 +93,6 @@ else
 	-- globalsLoad
 	--********************************
 		function _newClass_.globalsLoad( file , rootTag, globals, writeLog )	
-
 			local xmlFile = loadXMLFile( "mogliBasics", file, rootTag )
 			_newClass_.globalsLoad2( xmlFile , rootTag, globals, writeLog )	
 		end
@@ -131,12 +131,68 @@ else
 		--			print(file..": "..name.." = "..tostring(globals[name]))
 				else
 					tm = 2
-					print(file..": "..name..": invalid XML type : "..tp)
+					print('    <'..name..": invalid XML type : "..tp)
 				end
 				if writeLog and tm > 0 then
 					if wl then
 						wl = false
-						print('Loading settings from "'..tostring(file)..'"')
+						print('Loading settings...')
+					end
+					if tm == 1 then
+						print('    <'..name..' type="'..tostring(tp)..'" value="'..tostring(globals[name])..'"/>')
+					else
+						print('    <'..name..' .../>: invalid XML type : '..tostring(tp))
+					end
+				end
+			end
+		end
+		
+	--********************************
+	-- globalsCreate
+	--********************************
+		function _newClass_.globalsCreate( file , rootTag, globals, writeLog )	
+			if writeLog then 
+				print('Creating file "'..file..'"...')
+			end
+			local xmlFile = createXMLFile( "mogliBasics", file, rootTag )
+			_newClass_.globalsCreate2( xmlFile , rootTag, globals, writeLog )	
+			saveXMLFile(xmlFile)
+		end 
+		
+	--********************************
+	-- globalsCreate2
+	--********************************
+		function _newClass_.globalsCreate2( xmlFile , rootTag, globals, writeLog )	
+
+			local wl = true
+			for name,value in pairs(globals) do
+				local tp = mogliBase30.getValueType( value )			
+				local tm = 1
+				if     tp == nil then
+					tm = 0
+				elseif tp == "boolean" then
+					tp = "bool"
+					setXMLBool( xmlFile, rootTag.."." .. name .. "#value", value )
+				elseif tp == "float32" or tp == "number" then
+					tp = "float"
+					setXMLFloat( xmlFile, rootTag.."." .. name .. "#value", value )
+				elseif tp == "int32" or tp == "int8" then
+					tp = "int"
+					setXMLInt( xmlFile, rootTag.."." .. name .. "#value", value )
+				elseif tp == "string" then
+					tp = "string"
+					setXMLString( xmlFile, rootTag.."." .. name .. "#value", value )
+				else
+					tm = 2
+					print('    <'..name..": invalid XML type : "..tp)
+				end
+				if tm == 1 then 
+					setXMLString(xmlFile, rootTag.."." .. name .. "#type", tp)
+				end 
+				if writeLog and tm > 0 then
+					if wl then
+						wl = false
+						print('Writing settings...')
 					end
 					if tm == 1 then
 						print('    <'..name..' type="'..tostring(tp)..'" value="'..tostring(globals[name])..'"/>')
@@ -151,14 +207,9 @@ else
 	-- getUiScale
 	--********************************
 		function _newClass_.getUiScale()
-			-- compatibility < patch 1.3
-			if g_uiScale ~= nil and 0 < g_uiScale and g_uiScale < 2 then
-				return g_uiScale
-			end
-			-- patch 1.3 and above
 			local uiScale = 1.0
-			if g_gameSettings ~= nil and g_gameSettings.getValue ~= nil then
-					uiScale = Utils.getNoNil(g_gameSettings:getValue("uiScale"), 1.0)
+			if g_gameSettings ~= nil and type( g_gameSettings.uiScale ) == "number" then
+				uiScale = g_gameSettings.uiScale
 			end
 			return uiScale 
 		end
@@ -182,207 +233,108 @@ else
 			return id
 		end;
 
-	--**********************************************************************************************************	
-	-- hasInputEvent
-	--**********************************************************************************************************	
-		function _newClass_.mbHasInputEvent( name, noWarning )
-			if name == nil or name == "" then
-				return false 
-			end 
-			if InputBinding[name] == nil then
-				if not ( noWarning or _newClass_.noInputWarning ) then
-					if _newClass_.mbUndefinedInputs == nil then
-						_newClass_.mbUndefinedInputs = {}
-					end
-					if not ( _newClass_.mbUndefinedInputs[name] ) then
-						_newClass_.mbUndefinedInputs[name] = true
-						print("WARNING: undefined input in ".._globalClassName_..": "..tostring(name))
-					end
-				end
-				return false
-			end
-			if InputBinding.hasEvent(InputBinding[name]) then
-				if InputBinding.areKeysPressed( InputBinding.actions[InputBinding[name]].keys1 ) then
-				  return mogliBase30.checkForKeyModifiers( InputBinding.actions[InputBinding[name]].keys1 )
-				end
-				if InputBinding.areKeysPressed( InputBinding.actions[InputBinding[name]].keys2 ) then
-				  return mogliBase30.checkForKeyModifiers( InputBinding.actions[InputBinding[name]].keys2 )
-				end
-				return true
-			end
-			return false
-		end
-
-	--**********************************************************************************************************	
-	-- hasInputEvent
-	--**********************************************************************************************************	
-		function _newClass_.mbIsInputPressed( name, noWarning )
-			if InputBinding[name] == nil then
-				if not ( noWarning or _newClass_.noInputWarning ) then
-					if _newClass_.mbUndefinedInputs == nil then
-						_newClass_.mbUndefinedInputs = {}
-					end
-					if not ( _newClass_.mbUndefinedInputs[name] ) then
-						_newClass_.mbUndefinedInputs[name] = true
-						print("WARNING: undefined input in ".._globalClassName_..": "..tostring(name))
-					end
-				end
-				return false
-			end
-			return InputBinding.isPressed(InputBinding[name])		
-		end
-
 	--********************************
 	-- normalizeAngle
 	--********************************
 		function _newClass_.normalizeAngle( angle )
 			local normalizedAngle = angle
-			if angle > math.pi then
-				normalizedAngle = angle - math.pi - math.pi
-			elseif angle <= -math.pi then
-				normalizedAngle = angle + math.pi + math.pi
+			while normalizedAngle >= math.pi do
+				normalizedAngle = normalizedAngle - math.pi - math.pi
+			end 
+			while normalizedAngle < -math.pi do
+				normalizedAngle = normalizedAngle + math.pi + math.pi
 			end
 			return normalizedAngle
 		end
 
 	--********************************
-	-- prerequisitesPresent
+	-- mbClamp
 	--********************************
-		function _newClass_.prerequisitesPresent(specializations)
-			return true
-		end
-
-	--********************************
-	-- load
-	--********************************
-		function _newClass_:load(savegame)
-		-- should always be overwritten
-			_newClass_.registerState( self, "mogliBasicsDummy", false, _newClass_.debugEvent )
-		end
-
-	--********************************
-	-- postLoad
-	--********************************
-		function _newClass_:postLoad(savegame)
-			if savegame ~= nil and type( _newClass_.loadFromAttributesAndNodes ) == "function" then
-				_newClass_.loadFromAttributesAndNodes( self, savegame.xmlFile, savegame.key, savegame.resetVehicles )
+		function _newClass_.mbClamp( v, minV, maxV )
+			if v == nil then 
+				return 
+			end 
+			if minV ~= nil and v <= minV then 
+				return minV 
 			end
+			if maxV ~= nil and v >= maxV then 
+				return maxV 
+			end 
+			return v 
 		end
 
-	--********************************
-	-- delete
-	--********************************
-		function _newClass_:delete()
-		end
-
-	--********************************
-	-- mouseEvent
-	--********************************
-		function _newClass_:mouseEvent(posX, posY, isDown, isUp, button)
-		end
-
-	--********************************
-	-- keyEvent
-	--********************************
-		function _newClass_:keyEvent(unicode, sym, modifier, isDown)
-		end
-
-	--********************************
-	-- update
-	--********************************
-		function _newClass_:update(dt)
-		end
-
-	--********************************
-	-- updateTick
-	--********************************
-		function _newClass_:updateTick(dt)	
-		end
-
-	--********************************
-	-- draw
-	--********************************
-		function _newClass_:draw()	
-		end  
-					 
 	--********************************
 	-- getSaveAttributesAndNodes
 	--********************************
-		function _newClass_:getSaveAttributesAndNodes(nodeIdent)
-			local attributes = ""
-			local nodes      = ""
-			
-			if self[_globalClassName_.."StateHandler"] ~= nil then			
+	--function _newClass_:saveStatsToXMLFile(xmlFile, key)
+		function _newClass_:saveToXMLFile(xmlFile, key)
+			if self[_globalClassName_.."StateHandler"] ~= nil then		
+				local i = 0
 				for level1,state in pairs( self[_globalClassName_.."StateHandler"] ) do
 					if state.save then
 						local value = _newClass_.mbGetState( self, level1 )
 						
 						if value ~= nil and ( state.default == nil or not mogliBase30.compare( state.default, value ) ) then
 							local vType  = mogliBase30.getValueType( value )
-							local xValue = nil
+							local xmlKey = string.format("%s.state(%d)", key, i)
+							i = i + 1
+							setXMLString(xmlFile, xmlKey.."#name", HTMLUtil.encodeToHTML(level1))
+							setXMLString(xmlFile, xmlKey.."#type", HTMLUtil.encodeToHTML(vType))
+							
 							if     vType == "string"  then 
-								xValue = value
+								setXMLString(xmlFile, xmlKey.."#value", HTMLUtil.encodeToHTML(value))
 							elseif vType == "int8"    
-									or vType == "int32"   
-									or vType == "float32" 
+									or vType == "int32" then   
+								setXMLInt(xmlFile, xmlKey.."#value", value)
+							elseif vType == "float32" 
 									or vType == "number"  then 
-								xValue = tostring(value)
+								setXMLFloat(xmlFile, xmlKey.."#value", value)
 							elseif vType == "boolean" then 
-								xValue = tostring(value)
-							end
-							if xValue ~= nil then
-								if nodes == "" then
-									nodes = nodeIdent..'<'.._globalClassName_..'>'
-								end
-								nodes = nodes .. '\n'..nodeIdent..'  <state name="'..level1..'" type="'..vType..'" value="'..xValue..'"/>'
+								setXMLBool(xmlFile, xmlKey.."#value", value)
 							end
 						end
 					end
-				end
-				
-				if nodes ~= "" then
-					nodes = nodes .. '\n'..nodeIdent..'</'.._globalClassName_..'>'
-				end
-			end
-						
-			return attributes, nodes
+				end	
+			end		
 		end;
 
 	--********************************
 	-- loadFromAttributesAndNodes
 	--********************************
-		function _newClass_:loadFromAttributesAndNodes(xmlFile, key, resetVehicles)
-			local i = 0
-			while true do
-				local xmlKey = string.format("%s.%s.state(%d)", key, _globalClassName_, i)
-				i = i + 1
-				local level1 = getXMLString(xmlFile, xmlKey.."#name")
-				if level1 == nil then
-					break
-				end
-				local vType = getXMLString(xmlFile, xmlKey.."#type")
-				local value = nil
-				if     vType == nil then
-				elseif vType == "string"  then 
-					value = getXMLString(xmlFile, xmlKey.."#value")
-				elseif vType == "int8"    
-						or vType == "int32" then 
-					value = getXMLInt(xmlFile, xmlKey.."#value")
-				elseif vType == "float32" 
-						or vType == "number"  then 
-					value = getXMLFloat(xmlFile, xmlKey.."#value")
-				elseif vType == "boolean" then 
-					value = getXMLBool(xmlFile, xmlKey.."#value")
-				end
-				
-			--print(tostring(xmlKey).." "..tostring(level1).." "..tostring(vType).." "..tostring(value))
-				
-				if value ~= nil then
-					_newClass_.mbSetState( self, level1, value, true)
+		function _newClass_:onPostLoad(samegame)
+			if savegame ~= nil then
+				local xmlFile = savegame.xmlFile
+				local key     = savegame.key
+				local i = 0
+				while true do
+					local xmlKey = string.format("%s.%s.state(%d)", key, _globalClassName_, i)
+					i = i + 1
+					local level1 = HTMLUtil.decodeFromHTML(getXMLString(xmlFile, xmlKey.."#name"))
+					if level1 == nil then
+						break
+					end
+					local vType = HTMLUtil.decodeFromHTML(getXMLString(xmlFile, xmlKey.."#type"))
+					local value = nil
+					if     vType == nil then
+					elseif vType == "string"  then 
+						value = HTMLUtil.decodeFromHTML(getXMLString(xmlFile, xmlKey.."#value"))
+					elseif vType == "int8"    
+							or vType == "int32" then 
+						value = getXMLInt(xmlFile, xmlKey.."#value")
+					elseif vType == "float32" 
+							or vType == "number"  then 
+						value = getXMLFloat(xmlFile, xmlKey.."#value")
+					elseif vType == "boolean" then 
+						value = getXMLBool(xmlFile, xmlKey.."#value")
+					end
+					
+				--print(tostring(xmlKey).." "..tostring(level1).." "..tostring(vType).." "..tostring(value))
+					
+					if value ~= nil then
+						_newClass_.mbSetState( self, level1, value, true)
+					end
 				end
 			end
-			
-			return BaseMission.VEHICLE_LOAD_OK;
 		end
 
 	--********************************
@@ -658,6 +610,7 @@ else
 -- mogliBase30.printCallStack
 --=======================================================================================
 	function mogliBase30.printCallStack( depth )
+		if debug == nil then return end 
 		local i = 2 
 		local d = 10
 		if type( depth ) == "number" and depth > 1 then
@@ -963,22 +916,10 @@ else
 -- readStream
 --=======================================================================================
 	mogliBase30Event.readStream = function(self, streamId, connection)
-		--both clients and server can receive this event
-		local id       = streamReadInt32(streamId) 
-		if id == 0 then
-			self.object  = nil
-			return 
-		end
-		
+		self.object    = NetworkUtil.readNodeObject( streamId )				
 		self.className = streamReadString(streamId)
 		self.level1, self.value = _G[mogliBaseClass].readStreamEx( streamId )
-		
-		self.object  = networkGetObject(id) 
-		if self.object == nil then
-			print("Error reading network ID: "..tostring(id).." ("..tostring(self.className)..")")
-		else
-			self:run(connection) 
-		end
+		self:run(connection) 
 	end 
 	
 --=======================================================================================
@@ -986,21 +927,7 @@ else
 --=======================================================================================
 	mogliBase30Event.writeStream = function(self, streamId, connection)
 		--both clients and server can send this event
-		
-		local id = nil
-		
-		if self.object ~= nil and self.className ~= nil then
-			id = networkGetObjectId(self.object)
-		end
-		
-		if id == nil then
-			print("Error sending network ID: nil ("..tostring(self.className)..")")
-			mogliBase30.printCallStack()
-			streamWriteInt32(streamId, 0 )
-			return
-		end
- 
-		streamWriteInt32(streamId, id )
+		NetworkUtil.writeNodeObject( streamId, self.object )
 		streamWriteString(streamId, self.className )
 		_G[mogliBaseClass].writeStreamEx( streamId, self.level1, self.value )
 	end 
@@ -1039,36 +966,12 @@ else
 		return self
 	end
 	function mogliBase30Request:readStream(streamId, connection)
-		local id       = streamReadInt32(streamId) 
-		if id == 0 then
-			self.object  = nil
-			return 
-		end
-		
+		self.object    = NetworkUtil.readNodeObject( streamId )				
 		self.className = streamReadString(streamId)
-		
-		self.object  = networkGetObject(id) 
-		if self.object == nil then
-			print("Error reading network ID: "..tostring(id).." ("..tostring(self.className)..")")
-		else
-			self:run(connection) 
-		end
+		self:run(connection) 
 	end
 	function mogliBase30Request:writeStream(streamId, connection)
-		local id = nil
-		
-		if self.object ~= nil and self.className ~= nil then
-			id = networkGetObjectId(self.object)
-		end
-		
-		if id == nil then
-			print("Error sending network ID: nil ("..tostring(self.className)..")")
-			mogliBase30.printCallStack()
-			streamWriteInt32(streamId, 0 )
-			return
-		end
-		
-		streamWriteInt32( streamId, id )
+		NetworkUtil.writeNodeObject( streamId, self.object )
 		streamWriteString(streamId, self.className )
 	end
 	function mogliBase30Request:run(connection)
@@ -1096,36 +999,12 @@ else
 		return self
 	end
 	function mogliBase30Reply:readStream(streamId, connection)
-		local id       = streamReadInt32(streamId) 
-		if id == 0 then
-			self.object  = nil
-			return 
-		end
-		local mbDocument
+		self.object = NetworkUtil.readNodeObject( streamId )		
 		self.className, self.document = mogliBase30.readStreamEx( streamId )
-		
-		self.object  = networkGetObject(id) 
-		if self.object == nil then
-			print("Error reading network ID: "..tostring(id).." ("..tostring(self.className)..")")
-		else
-			self:run(connection) 
-		end
+		self:run(connection) 
 	end
 	function mogliBase30Reply:writeStream(streamId, connection)
-		local id = nil
-		
-		if self.object ~= nil and self.className ~= nil then
-			id = networkGetObjectId(self.object)
-		end
-		
-		if id == nil then
-			print("Error sending network ID: nil ("..tostring(self.className)..")")
-			mogliBase30.printCallStack()
-			streamWriteInt32(streamId, 0 )
-			return
-		end
-		
-		streamWriteInt32(streamId, id )
+		NetworkUtil.writeNodeObject( streamId, self.object )
 		mogliBase30.writeStreamEx( streamId, self.className, self.document )
 	end
 	function mogliBase30Reply:run(connection)
